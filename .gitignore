@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+env/
+
+# Secrets & auth
+.env
+*.credentials.json
+storage_state.json
+
+# Runtime data
+notebooks_store.json
+reports_store.json
+custom_templates.json
+
+# OS
+.DS_Store
+Thumbs.db

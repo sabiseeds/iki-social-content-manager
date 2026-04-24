@@ -1,0 +1,1888 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Content Manager</title>
+<style>
+/* ── reset & base ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --green-900: #14532d; --green-700: #15803d; --green-500: #22c55e;
+  --green-100: #dcfce7; --green-50: #f0fdf4;
+  --slate-900: #0f172a; --slate-800: #1e293b; --slate-700: #334155;
+  --slate-500: #64748b; --slate-300: #cbd5e1; --slate-100: #f1f5f9;
+  --slate-50:  #f8fafc; --white: #fff;
+  --amber-400: #fbbf24; --red-500: #ef4444; --blue-500: #3b82f6;
+  --radius: 10px; --shadow: 0 2px 12px rgba(0,0,0,.08);
+  --sidebar-w: 280px; --font: 'Inter', system-ui, sans-serif;
+}
+html, body { height: 100%; font-family: var(--font); background: var(--slate-100); color: var(--slate-800); }
+button { cursor: pointer; font-family: inherit; }
+input, textarea, select { font-family: inherit; }
+a { color: var(--green-700); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── layout ── */
+.app { display: flex; height: 100vh; overflow: hidden; }
+
+/* ── sidebar ── */
+.sidebar {
+  width: var(--sidebar-w); background: var(--slate-900); color: var(--white);
+  display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0;
+}
+.sidebar-header {
+  padding: 20px 16px 12px;
+  background: linear-gradient(135deg, var(--green-900), var(--green-700));
+}
+.sidebar-header h2 { font-size: 1rem; font-weight: 700; }
+.sidebar-header p  { font-size: .72rem; opacity: .75; margin-top: 2px; }
+.sidebar-section { padding: 12px 16px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.sidebar-section h3 { font-size: .7rem; text-transform: uppercase; letter-spacing: .08em;
+                      color: var(--slate-500); margin-bottom: 8px; }
+.nb-list { flex: 1; overflow-y: auto; padding: 8px; }
+.nb-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid transparent; margin-bottom: 4px; transition: all .15s;
+}
+.nb-item:hover { background: rgba(255,255,255,.06); }
+.nb-item.active { background: rgba(34,197,94,.15); border-color: rgba(34,197,94,.3); }
+.nb-item-check { width: 16px; height: 16px; accent-color: var(--green-500); flex-shrink: 0; }
+.nb-item-body { flex: 1; min-width: 0; }
+.nb-item-title { font-size: .82rem; font-weight: 600; white-space: nowrap;
+                 overflow: hidden; text-overflow: ellipsis; }
+.nb-item-meta  { font-size: .68rem; color: var(--slate-500); margin-top: 2px; }
+.nb-remove { background: none; border: none; color: var(--slate-500); font-size: 1rem;
+             padding: 2px 4px; border-radius: 4px; }
+.nb-remove:hover { color: var(--red-500); background: rgba(239,68,68,.1); }
+
+/* add notebook form */
+.add-nb-form { display: flex; flex-direction: column; gap: 6px; }
+.add-nb-form input { background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12);
+  color: var(--white); border-radius: 6px; padding: 7px 10px; font-size: .8rem; width: 100%; }
+.add-nb-form input::placeholder { color: var(--slate-500); }
+.add-nb-form input:focus { outline: none; border-color: var(--green-500); }
+.btn-add-nb {
+  background: var(--green-700); color: var(--white); border: none;
+  border-radius: 6px; padding: 7px; font-size: .8rem; font-weight: 600;
+  width: 100%; transition: background .15s;
+}
+.btn-add-nb:hover { background: var(--green-500); }
+
+/* ── main ── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+/* ── top bar ── */
+.topbar {
+  background: var(--white); border-bottom: 1px solid var(--slate-300);
+  padding: 14px 24px; display: flex; align-items: center; gap: 16px;
+  box-shadow: var(--shadow); z-index: 10;
+}
+.topbar-title { font-size: 1.05rem; font-weight: 700; flex: 1;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar-sub { font-size: .78rem; color: var(--slate-500); margin-top: 2px; }
+.nb-badge { background: var(--green-100); color: var(--green-700); border-radius: 20px;
+            padding: 2px 10px; font-size: .72rem; font-weight: 700; }
+
+/* ── tabs ── */
+.tabs { display: flex; background: var(--white); border-bottom: 1px solid var(--slate-300);
+        padding: 0 24px; gap: 4px; }
+.tab-btn {
+  padding: 10px 18px; background: none; border: none; border-bottom: 2px solid transparent;
+  font-size: .85rem; font-weight: 600; color: var(--slate-500); transition: all .15s;
+}
+.tab-btn:hover { color: var(--green-700); }
+.tab-btn.active { color: var(--green-700); border-bottom-color: var(--green-500); }
+
+/* ── content area ── */
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ── cards & sections ── */
+.card {
+  background: var(--white); border-radius: var(--radius);
+  border: 1px solid var(--slate-300); box-shadow: var(--shadow);
+  padding: 20px 24px; margin-bottom: 16px;
+}
+.card h3 { font-size: .95rem; font-weight: 700; margin-bottom: 12px; }
+.section-title { font-size: 1rem; font-weight: 700; margin-bottom: 14px;
+                 display: flex; align-items: center; gap: 8px; }
+
+/* ── metric grid ── */
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+.metric-card { background: var(--white); border: 1px solid var(--slate-300); border-radius: var(--radius);
+               padding: 16px; text-align: center; box-shadow: var(--shadow); }
+.metric-val  { font-size: 1.6rem; font-weight: 800; color: var(--green-700); }
+.metric-lbl  { font-size: .72rem; color: var(--slate-500); margin-top: 4px; }
+
+/* ── source list ── */
+.source-item {
+  border: 1px solid var(--slate-300); border-radius: 8px; padding: 12px 16px;
+  margin-bottom: 8px; border-left: 4px solid var(--green-500);
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.source-item.processing { border-left-color: var(--amber-400); }
+.source-item.error      { border-left-color: var(--red-500); }
+.source-body { flex: 1; min-width: 0; }
+.source-title { font-size: .88rem; font-weight: 600; }
+.source-meta  { font-size: .74rem; color: var(--slate-500); margin-top: 4px; }
+.source-badge { font-size: .68rem; padding: 2px 8px; border-radius: 20px; font-weight: 700;
+                display: inline-block; }
+.badge-ready { background: var(--green-100); color: var(--green-700); }
+.badge-proc  { background: #fef3c7; color: #92400e; }
+.badge-error { background: #fee2e2; color: #991b1b; }
+.btn-del-src { background: none; border: none; color: var(--slate-400); font-size: .9rem;
+               padding: 4px 6px; border-radius: 4px; flex-shrink: 0; }
+.btn-del-src:hover { color: var(--red-500); background: #fee2e2; }
+
+/* ── input row ── */
+.input-row { display: flex; gap: 8px; }
+.input-row input, .input-row select { flex: 1; }
+input[type=text], input[type=url], textarea, select {
+  border: 1px solid var(--slate-300); border-radius: 8px;
+  padding: 9px 12px; font-size: .85rem; width: 100%; background: var(--white);
+}
+input:focus, textarea:focus, select:focus {
+  outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(34,197,94,.15);
+}
+textarea { resize: vertical; min-height: 80px; }
+
+/* ── buttons ── */
+.btn { padding: 9px 18px; border-radius: 8px; border: none;
+       font-size: .85rem; font-weight: 600; transition: all .15s; }
+.btn-primary   { background: var(--green-700); color: var(--white); }
+.btn-primary:hover { background: var(--green-900); }
+.btn-secondary { background: var(--slate-100); color: var(--slate-700); border: 1px solid var(--slate-300); }
+.btn-secondary:hover { background: var(--slate-200); }
+.btn-danger    { background: #fee2e2; color: var(--red-500); border: 1px solid #fecaca; }
+.btn-danger:hover { background: #fecaca; }
+.btn-sm { padding: 5px 12px; font-size: .78rem; }
+.btn-full { width: 100%; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ── chat ── */
+.chat-messages { display: flex; flex-direction: column; gap: 12px; margin-bottom: 16px;
+                 min-height: 300px; max-height: 500px; overflow-y: auto;
+                 border: 1px solid var(--slate-300); border-radius: 8px; padding: 16px;
+                 background: var(--slate-50); }
+.chat-empty { text-align: center; color: var(--slate-400); font-size: .85rem; margin: auto; }
+.msg { max-width: 82%; }
+.msg-user { align-self: flex-end; }
+.msg-ai   { align-self: flex-start; }
+.msg-bubble {
+  padding: 10px 14px; border-radius: 12px; font-size: .87rem; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-word;
+}
+.msg-user .msg-bubble { background: var(--green-700); color: var(--white); border-radius: 12px 12px 4px 12px; }
+.msg-ai   .msg-bubble { background: var(--white); border: 1px solid var(--slate-300); border-radius: 12px 12px 12px 4px; }
+.msg-meta { font-size: .68rem; color: var(--slate-400); margin-top: 4px; text-align: right; }
+.msg-ai .msg-meta { text-align: left; }
+.chat-input-row { display: flex; gap: 8px; align-items: flex-end; }
+.chat-input-row textarea { flex: 1; min-height: 48px; max-height: 120px; resize: vertical; }
+
+/* file attachment */
+.attach-btn {
+  background: var(--slate-100); border: 1px solid var(--slate-300);
+  border-radius: 8px; padding: 9px 12px; font-size: 1rem; cursor: pointer;
+  transition: all .15s; flex-shrink: 0; line-height: 1;
+}
+.attach-btn:hover { background: #eff6ff; border-color: #93c5fd; }
+.file-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 20px;
+  padding: 4px 10px; font-size: .75rem; color: #1d4ed8;
+  font-weight: 600; margin-bottom: 8px; max-width: 100%;
+}
+.file-chip-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.file-chip-rm { cursor: pointer; opacity: .6; font-size: .85rem; }
+.file-chip-rm:hover { opacity: 1; color: var(--red-500); }
+.chat-mode-toggle {
+  display: flex; gap: 0; margin-bottom: 10px; border: 1px solid var(--slate-300);
+  border-radius: 8px; overflow: hidden; width: fit-content;
+}
+.chat-mode-btn {
+  padding: 6px 14px; font-size: .78rem; font-weight: 600; cursor: pointer;
+  border: none; background: var(--slate-100); color: var(--slate-600); transition: all .15s;
+}
+.chat-mode-btn.active { background: var(--green-700); color: var(--white); }
+.claude-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: #faf5ff; border: 1px solid #e9d5ff; color: #7c3aed;
+  border-radius: 20px; padding: 2px 8px; font-size: .68rem; font-weight: 700;
+}
+.token-info { font-size: .68rem; color: var(--slate-400); margin-top: 3px; }
+.auth-badge-api  { background: #eff6ff; border: 1px solid #bfdbfe; color: #1d4ed8; }
+.auth-badge-cc   { background: #faf5ff; border: 1px solid #e9d5ff; color: #7c3aed; }
+.auth-badge-none { background: #fee2e2; border: 1px solid #fecaca; color: #991b1b; }
+.auth-status-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+.auth-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+.auth-dot-ok   { background: #22c55e; }
+.auth-dot-none { background: #ef4444; }
+
+/* ── saved report cards ── */
+.saved-report-card {
+  background: var(--white); border: 1px solid var(--slate-300);
+  border-radius: var(--radius); padding: 16px 20px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 14px; box-shadow: var(--shadow);
+}
+.saved-report-icon { font-size: 1.6rem; flex-shrink: 0; }
+.saved-report-body { flex: 1; min-width: 0; }
+.saved-report-name { font-size: .92rem; font-weight: 700; white-space: nowrap;
+                     overflow: hidden; text-overflow: ellipsis; }
+.saved-report-meta { font-size: .72rem; color: var(--slate-500); margin-top: 3px; }
+.saved-report-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.suggestion-btn {
+  background: var(--green-50); border: 1px solid var(--green-100); color: var(--green-700);
+  border-radius: 20px; padding: 5px 12px; font-size: .78rem; cursor: pointer;
+  transition: all .15s;
+}
+.suggestion-btn:hover { background: var(--green-100); }
+
+/* ── report templates ── */
+.template-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+.template-card {
+  border: 2px solid var(--slate-300); border-radius: var(--radius);
+  padding: 16px; cursor: pointer; transition: all .2s; background: var(--white);
+  position: relative;
+}
+.template-card:hover  { border-color: var(--green-500); box-shadow: 0 4px 16px rgba(34,197,94,.15); }
+.template-card.selected { border-color: var(--green-500); background: var(--green-50); }
+.template-card.new-template { border-style: dashed; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; color: var(--slate-500); min-height: 120px; }
+.template-card.new-template:hover { color: var(--green-700); }
+.template-icon { font-size: 2rem; margin-bottom: 8px; }
+.template-name { font-size: .9rem; font-weight: 700; margin-bottom: 4px; }
+.template-desc { font-size: .75rem; color: var(--slate-500); line-height: 1.4; }
+.template-actions { display: flex; gap: 4px; margin-top: 10px; }
+.template-actions button { font-size: .7rem; padding: 3px 8px; border-radius: 5px; border: 1px solid;
+  cursor: pointer; font-family: inherit; }
+.tpl-edit-btn   { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; }
+.tpl-delete-btn { background: #fef2f2; border-color: #fecaca; color: #dc2626; }
+.tpl-custom-badge { position: absolute; top: 8px; right: 8px; font-size: .62rem; background: #faf5ff;
+  border: 1px solid #e9d5ff; color: #7c3aed; border-radius: 4px; padding: 1px 5px; }
+
+/* ── template editor modal ── */
+.tpl-modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 200;
+  display: flex; align-items: center; justify-content: center; }
+.tpl-modal { background: var(--white); border-radius: 14px; padding: 28px; width: min(700px, 95vw);
+  max-height: 90vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.25); }
+.tpl-modal h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 18px; }
+.tpl-row { display: grid; grid-template-columns: 80px 1fr; gap: 10px; margin-bottom: 12px; }
+.tpl-questions { margin-bottom: 14px; }
+.tpl-question-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: flex-start; }
+.tpl-question-row textarea { flex: 1; resize: vertical; min-height: 56px; padding: 7px 10px;
+  border: 1px solid var(--slate-300); border-radius: 6px; font-size: .83rem; font-family: inherit; }
+.tpl-question-row input { flex: 1; padding: 7px 10px; border: 1px solid var(--slate-300);
+  border-radius: 6px; font-size: .83rem; font-family: inherit; }
+.tpl-rm-btn { background: #fef2f2; border: 1px solid #fecaca; color: #dc2626; border-radius: 5px;
+  padding: 4px 8px; cursor: pointer; font-size: .8rem; white-space: nowrap; flex-shrink: 0; }
+.tpl-add-btn { background: var(--green-50); border: 1px dashed var(--green-500); color: var(--green-700);
+  border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: .8rem; width: 100%; margin-bottom: 6px; }
+.tpl-modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; border-top: 1px solid var(--slate-300); padding-top: 14px; }
+
+/* ── report output ── */
+.report-section { margin-bottom: 24px; }
+.report-section h4 { font-size: .95rem; font-weight: 700; color: var(--green-900);
+                     border-bottom: 2px solid var(--green-100); padding-bottom: 6px; margin-bottom: 10px; }
+.qa-block { margin-bottom: 12px; }
+.qa-q { font-size: .8rem; color: var(--slate-500); font-style: italic; margin-bottom: 4px; }
+.qa-a { font-size: .87rem; line-height: 1.6; white-space: pre-wrap; }
+.nb-section-header { background: var(--green-100); color: var(--green-900); border-radius: 6px;
+                     padding: 8px 14px; font-weight: 700; font-size: .85rem; margin-bottom: 10px; }
+
+/* ── generate panel ── */
+.gen-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+
+/* ── artifact item ── */
+.artifact-item { display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+                 border: 1px solid var(--slate-300); border-radius: 8px; margin-bottom: 6px; }
+.artifact-type { font-size: .8rem; font-weight: 700; background: var(--slate-100);
+                 padding: 2px 8px; border-radius: 20px; }
+.artifact-body { flex: 1; }
+.artifact-title { font-size: .85rem; font-weight: 600; }
+.artifact-meta  { font-size: .72rem; color: var(--slate-500); }
+
+/* ── spinner / toast ── */
+.spinner { display: inline-block; width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3);
+           border-top-color: var(--white); border-radius: 50%; animation: spin .6s linear infinite; }
+.spinner-dark { border-color: rgba(0,0,0,.1); border-top-color: var(--green-700); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast-container { position: fixed; top: 20px; right: 20px; z-index: 9999; display: flex;
+                   flex-direction: column; gap: 8px; max-width: 340px; }
+.toast { padding: 12px 18px; border-radius: 8px; font-size: .85rem; font-weight: 600;
+         box-shadow: 0 4px 20px rgba(0,0,0,.15); animation: slide-in .2s ease; }
+@keyframes slide-in { from { transform: translateX(100%); opacity: 0; } to { transform: none; opacity: 1; } }
+.toast-success { background: var(--green-700); color: var(--white); }
+.toast-error   { background: var(--red-500);   color: var(--white); }
+.toast-info    { background: var(--slate-800);  color: var(--white); }
+
+/* ── risk badges ── */
+.risk-high   { color: var(--red-500); font-weight: 700; }
+.risk-medium { color: var(--amber-400); font-weight: 700; }
+.risk-low    { color: var(--green-500); font-weight: 700; }
+
+/* ── empty state ── */
+.empty-state { text-align: center; padding: 60px 20px; color: var(--slate-400); }
+.empty-state .big { font-size: 3rem; margin-bottom: 12px; }
+.empty-state p { font-size: .9rem; }
+
+/* ── util ── */
+.flex { display: flex; } .gap-8 { gap: 8px; } .gap-12 { gap: 12px; }
+.mt-8 { margin-top: 8px; } .mt-12 { margin-top: 12px; } .mt-16 { margin-top: 16px; }
+.mb-8 { margin-bottom: 8px; } .mb-12 { margin-bottom: 12px; }
+.text-sm { font-size: .82rem; } .text-muted { color: var(--slate-500); }
+.divider { border: none; border-top: 1px solid var(--slate-300); margin: 16px 0; }
+.label { font-size: .78rem; font-weight: 600; color: var(--slate-600); margin-bottom: 4px; display: block; }
+
+/* ── role visibility ── */
+body.role-user .admin-only { display: none !important; }
+
+/* ── login overlay ── */
+.login-overlay {
+  position: fixed; inset: 0; background: rgba(15,23,42,.88);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10000; backdrop-filter: blur(5px);
+}
+.login-card {
+  background: var(--white); border-radius: 16px; width: 380px;
+  overflow: hidden; box-shadow: 0 24px 64px rgba(0,0,0,.35);
+}
+.login-header {
+  background: linear-gradient(135deg, var(--green-900), var(--green-700));
+  color: var(--white); padding: 32px 32px 22px; text-align: center;
+}
+.login-header h1 { font-size: 1.35rem; font-weight: 700; margin-bottom: 4px; }
+.login-header p  { font-size: .82rem; opacity: .75; }
+.login-body { padding: 26px 32px 32px; display: flex; flex-direction: column; gap: 0; }
+.login-body .label { margin-top: 14px; margin-bottom: 5px; }
+.login-body .label:first-child { margin-top: 0; }
+.login-error {
+  background: #fee2e2; color: #991b1b; border-radius: 6px;
+  padding: 9px 12px; font-size: .82rem; margin-top: 12px; display: none;
+}
+.topbar-user { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.user-badge {
+  background: var(--green-100); color: var(--green-700); border-radius: 20px;
+  padding: 3px 12px; font-size: .75rem; font-weight: 700;
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LOGIN OVERLAY ══ -->
+<div id="login-overlay" class="login-overlay">
+  <div class="login-card">
+    <div class="login-header">
+      <h1>🏡 Content Manager</h1>
+      <p>Sign in to access your content</p>
+    </div>
+    <div class="login-body">
+      <label class="label">Username</label>
+      <input id="login-user" type="text" placeholder="e.g. admin"
+        autocomplete="username"
+        onkeydown="if(event.key==='Enter') document.getElementById('login-pass').focus()"/>
+      <label class="label">Password</label>
+      <input id="login-pass" type="password" placeholder="Password"
+        autocomplete="current-password"
+        onkeydown="if(event.key==='Enter') doLogin()"/>
+      <div id="login-error" class="login-error"></div>
+      <button class="btn btn-primary btn-full" style="margin-top:18px" onclick="doLogin()">
+        Sign In
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- ══ SIDEBAR ══ -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <h2>🏡 Content Manager</h2>
+      <p>Manage &amp; explore your research content</p>
+    </div>
+
+    <div class="sidebar-section admin-only">
+      <h3>Add Content</h3>
+      <div class="add-nb-form">
+        <input id="nb-url-input" type="url"
+          placeholder="https://notebooklm.google.com/notebook/…"
+          onkeydown="if(event.key==='Enter') addNotebook()"/>
+        <input id="nb-title-input" type="text" placeholder="Custom title (optional)"/>
+        <input id="nb-tags-input" type="text" placeholder="Tags: real-estate, vn, …"/>
+        <button class="btn-add-nb" onclick="addNotebook()">+ Add Content</button>
+      </div>
+    </div>
+
+    <div class="sidebar-section">
+      <h3>Select for Report</h3>
+      <p class="text-sm text-muted" style="margin-bottom:6px">
+        Check content to include in the Business Report tab.
+      </p>
+    </div>
+
+    <div class="nb-list" id="nb-list">
+      <div class="empty-state"><p>Loading…</p></div>
+    </div>
+  </aside>
+
+  <!-- ══ MAIN ══ -->
+  <div class="main">
+    <!-- top bar -->
+    <div class="topbar">
+      <div style="flex:1">
+        <div class="topbar-title" id="topbar-title">Select content ←</div>
+        <div class="topbar-sub" id="topbar-sub">No content selected</div>
+      </div>
+      <span class="nb-badge" id="source-count-badge" style="display:none"></span>
+      <button class="btn btn-secondary btn-sm" onclick="refreshSources()" id="refresh-btn" style="display:none">
+        🔄 Refresh
+      </button>
+      <div class="topbar-user">
+        <span class="user-badge" id="current-user"></span>
+        <button class="btn btn-secondary btn-sm" onclick="logout()">Sign Out</button>
+      </div>
+    </div>
+
+    <!-- tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="report">📊 Business Report</button>
+      <button class="tab-btn" data-tab="chat">💬 Chat</button>
+      <button class="tab-btn" data-tab="sources">📚 Sources</button>
+      <button class="tab-btn admin-only" data-tab="generate">⚙️ Generate</button>
+      <button class="tab-btn" data-tab="saved">💾 Saved Reports</button>
+    </div>
+
+    <!-- content -->
+    <div class="content">
+
+      <!-- ── REPORT TAB ── -->
+      <div class="tab-panel active" id="tab-report">
+        <div class="section-title">📊 Business Report Generator</div>
+        <p class="text-sm text-muted mb-12">
+          Select one or more content items in the sidebar, pick a template below, then click Generate.
+        </p>
+
+        <!-- template picker -->
+        <div class="template-grid" id="template-grid">
+          <!-- filled by JS -->
+        </div>
+
+        <div class="flex gap-8 mb-12">
+          <button class="btn btn-primary" id="gen-report-btn" onclick="generateReport()" disabled>
+            📊 Generate Report
+          </button>
+          <button class="btn btn-secondary" id="save-report-btn" onclick="saveReport()" disabled>💾 Save</button>
+          <button class="btn btn-secondary" onclick="downloadReport()">⬇️ Download MD</button>
+          <button class="btn btn-secondary" onclick="generateHtmlReport()" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;">🖨️ HTML → PDF</button>
+        </div>
+
+        <!-- report output -->
+        <div id="report-output"></div>
+      </div>
+
+      <!-- ── CHAT TAB ── -->
+      <div class="tab-panel" id="tab-chat">
+        <div class="section-title">💬 Chat with Content</div>
+        <p class="text-sm text-muted mb-12">
+          Questions are sent to the active content (click an item in the sidebar to make it active).
+        </p>
+
+        <!-- suggestions -->
+        <div class="suggestions" id="chat-suggestions">
+          <button class="suggestion-btn" onclick="sendSuggestion(this)">What is the project overview?</button>
+          <button class="suggestion-btn" onclick="sendSuggestion(this)">What are the key investment risks?</button>
+          <button class="suggestion-btn" onclick="sendSuggestion(this)">Describe the payment policy and bank loan options.</button>
+          <button class="suggestion-btn" onclick="sendSuggestion(this)">Who are the construction partners?</button>
+          <button class="suggestion-btn" onclick="sendSuggestion(this)">What makes this project unique vs. competitors?</button>
+          <button class="suggestion-btn" onclick="sendSuggestion(this)">What is the development timeline?</button>
+        </div>
+
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-empty" id="chat-empty">
+            Select content and ask a question to begin.
+          </div>
+        </div>
+
+        <!-- mode toggle -->
+        <div class="chat-mode-toggle">
+          <button class="chat-mode-btn active" id="mode-notebooklm" onclick="setChatMode('notebooklm')">
+            📚 Content
+          </button>
+          <button class="chat-mode-btn" id="mode-claude" onclick="setChatMode('claude')">
+            ✦ Claude + File
+          </button>
+        </div>
+
+        <!-- file chip (shown when file attached) -->
+        <div id="file-chip-row" style="display:none">
+          <div class="file-chip">
+            <span>📎</span>
+            <span class="file-chip-name" id="file-chip-name"></span>
+            <span class="file-chip-rm" onclick="removeAttachment()" title="Remove">✕</span>
+          </div>
+        </div>
+
+        <!-- hidden file input -->
+        <input type="file" id="file-input" style="display:none"
+          accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.txt,.csv,.json,.md,.py,.js,.ts,.html,.xml"
+          onchange="handleFileSelect(this)"/>
+
+        <div class="chat-input-row">
+          <button class="attach-btn" id="attach-btn" onclick="document.getElementById('file-input').click()"
+            title="Attach file (PDF, image, text, CSV…)" style="display:none">📎</button>
+          <textarea id="chat-input"
+            placeholder="Ask anything about the content…"
+            onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendChat();}"></textarea>
+          <div style="display:flex;flex-direction:column;gap:6px">
+            <button class="btn btn-primary" onclick="sendChat()">Send</button>
+            <button class="btn btn-secondary btn-sm" onclick="clearChat()">Clear</button>
+          </div>
+        </div>
+
+        <div id="claude-hint" style="display:none;margin-top:6px">
+          <span class="claude-badge">✦ claude-sonnet-4-6</span>
+          <span class="text-muted text-sm" style="margin-left:6px">
+            Attach any file — PDF, image, CSV, code — Claude will analyse it with your question.
+          </span>
+          <div class="auth-status-row" id="claude-auth-status">
+            <span class="auth-dot auth-dot-none" id="auth-dot"></span>
+            <span id="auth-label" class="source-badge" style="font-size:.72rem">Checking auth…</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── SOURCES TAB ── -->
+      <div class="tab-panel" id="tab-sources">
+        <div class="section-title">📚 Sources</div>
+
+        <!-- stats row -->
+        <div class="metric-grid" id="source-metrics" style="display:none">
+          <div class="metric-card"><div class="metric-val" id="m-total">-</div><div class="metric-lbl">Total</div></div>
+          <div class="metric-card"><div class="metric-val" id="m-ready">-</div><div class="metric-lbl">Ready</div></div>
+          <div class="metric-card"><div class="metric-val" id="m-proc">-</div><div class="metric-lbl">Processing</div></div>
+          <div class="metric-card"><div class="metric-val" id="m-err">-</div><div class="metric-lbl">Error</div></div>
+        </div>
+
+        <!-- add source -->
+        <div class="card">
+          <h3>➕ Add Source</h3>
+          <div class="input-row mb-8">
+            <input type="url" id="new-src-url" placeholder="https://… (article, YouTube, PDF URL, etc.)"/>
+            <button class="btn btn-primary" onclick="addSource()">Add</button>
+          </div>
+          <hr class="divider"/>
+          <h3>🔍 Web Research</h3>
+          <div class="input-row">
+            <input type="text" id="research-q" placeholder="Search query e.g. IKI Village pricing 2026…"/>
+            <select id="research-mode" style="width:120px">
+              <option value="fast">Fast</option>
+              <option value="deep">Deep</option>
+            </select>
+            <button class="btn btn-secondary" onclick="addResearch()">Research</button>
+          </div>
+        </div>
+
+        <!-- source list -->
+        <div id="source-list">
+          <div class="empty-state">
+            <div class="big">📚</div>
+            <p>Select content to view its sources.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── GENERATE TAB ── -->
+      <div class="tab-panel admin-only" id="tab-generate">
+        <div class="section-title">⚙️ Generate Artifacts</div>
+        <p class="text-sm text-muted mb-12">Generate podcasts, reports, quizzes, and more from your content.</p>
+
+        <div class="gen-grid">
+          <!-- Podcast -->
+          <div class="card">
+            <h3>🎙️ Audio Podcast</h3>
+            <label class="label">Instructions</label>
+            <textarea id="audio-instr" style="height:70px">
+Create an engaging podcast about this real estate project covering the developer story, unique design, and investment outlook.</textarea>
+            <div class="flex gap-8 mt-8">
+              <select id="audio-format" style="flex:1">
+                <option value="deep-dive">Deep Dive</option>
+                <option value="brief">Brief</option>
+                <option value="critique">Critique</option>
+                <option value="debate">Debate</option>
+              </select>
+              <button class="btn btn-primary" onclick="generateArtifact('audio')">Generate</button>
+            </div>
+          </div>
+
+          <!-- Report -->
+          <div class="card">
+            <h3>📄 Content Report</h3>
+            <label class="label">Extra instructions</label>
+            <textarea id="report-instr" style="height:70px">Focus on investment risks and ROI for foreign investors.</textarea>
+            <div class="flex gap-8 mt-8">
+              <select id="report-format" style="flex:1">
+                <option value="briefing-doc">Briefing Doc</option>
+                <option value="study-guide">Study Guide</option>
+                <option value="blog-post">Blog Post</option>
+              </select>
+              <button class="btn btn-primary" onclick="generateArtifact('report')">Generate</button>
+            </div>
+          </div>
+
+          <!-- Quiz -->
+          <div class="card">
+            <h3>📝 Quiz</h3>
+            <label class="label">Difficulty</label>
+            <select id="quiz-diff" style="width:100%;margin-bottom:8px">
+              <option value="medium">Medium</option>
+              <option value="easy">Easy</option>
+              <option value="hard">Hard</option>
+            </select>
+            <button class="btn btn-primary btn-full" onclick="generateArtifact('quiz')">Generate Quiz</button>
+          </div>
+
+          <!-- Mind Map -->
+          <div class="card">
+            <h3>🧠 Mind Map</h3>
+            <p class="text-sm text-muted mb-12">Generates instantly — no wait required.</p>
+            <button class="btn btn-primary btn-full" onclick="generateArtifact('mind-map')">Generate Mind Map</button>
+            <div id="mindmap-output" class="mt-8" style="display:none">
+              <textarea id="mindmap-json" style="height:180px;font-size:.72rem;font-family:monospace" readonly></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="card mt-8">
+          <h3>📋 Artifact Status</h3>
+          <button class="btn btn-secondary btn-sm mb-8" onclick="loadArtifacts()">🔄 Refresh Artifacts</button>
+          <div id="artifact-list"><p class="text-muted text-sm">Select content and click Refresh.</p></div>
+        </div>
+      </div>
+
+      <!-- ── SAVED REPORTS TAB ── -->
+      <div class="tab-panel" id="tab-saved">
+        <div class="section-title">💾 Saved Reports</div>
+        <p class="text-sm text-muted mb-12">
+          Reports you saved from the Business Report tab. Click to reload or delete.
+        </p>
+        <div id="saved-report-list">
+          <div class="empty-state"><div class="big">💾</div><p>No saved reports yet.</p></div>
+        </div>
+      </div>
+
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- Toast container -->
+<div class="toast-container" id="toasts"></div>
+
+<script>
+/* ══════════════════════════════════════════════════════════
+   STATE
+══════════════════════════════════════════════════════════ */
+const state = {
+  notebooks: [],          // all notebooks from store
+  activeNb: null,         // current single-active notebook ID (for chat / sources / generate)
+  checkedNbs: new Set(),  // notebooks checked for report
+  sources: [],
+  conversationId: null,
+  chatHistory: [],
+  selectedTemplate: null,
+  lastReport: null,       // for download
+  templates: [],
+  chatMode: 'notebooklm', // 'notebooklm' | 'claude'
+  attachedFile: null,     // File object when a file is attached
+};
+
+/* ══════════════════════════════════════════════════════════
+   API HELPERS
+══════════════════════════════════════════════════════════ */
+async function api(method, path, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch('/api' + path, opts);
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err);
+  }
+  return res.json();
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOAST
+══════════════════════════════════════════════════════════ */
+function toast(msg, type = 'info', duration = 4000) {
+  const el = document.createElement('div');
+  el.className = `toast toast-${type}`;
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), duration);
+}
+
+/* ══════════════════════════════════════════════════════════
+   NOTEBOOK LIST
+══════════════════════════════════════════════════════════ */
+async function loadNotebooks() {
+  state.notebooks = await api('GET', '/notebooks');
+  renderNbList();
+}
+
+function renderNbList() {
+  const container = document.getElementById('nb-list');
+  if (!state.notebooks.length) {
+    container.innerHTML = `<div class="empty-state"><p>No content yet. Paste a URL above.</p></div>`;
+    return;
+  }
+  container.innerHTML = state.notebooks.map(nb => `
+    <div class="nb-item ${state.activeNb === nb.id ? 'active' : ''}" onclick="setActiveNb('${nb.id}')">
+      <input type="checkbox" class="nb-item-check"
+        ${state.checkedNbs.has(nb.id) ? 'checked' : ''}
+        onclick="event.stopPropagation(); toggleCheckedNb('${nb.id}', this.checked)"/>
+      <div class="nb-item-body">
+        <div class="nb-item-title" title="${nb.title}">${nb.title}</div>
+        <div class="nb-item-meta">${nb.added_at} · ${(nb.tags||[]).join(', ') || 'no tags'}</div>
+      </div>
+      <button class="nb-remove" onclick="event.stopPropagation(); removeNotebook('${nb.id}')" title="Remove">✕</button>
+    </div>
+  `).join('');
+}
+
+function setActiveNb(id) {
+  state.activeNb = id;
+  const nb = state.notebooks.find(n => n.id === id);
+  document.getElementById('topbar-title').textContent = nb ? nb.title : id;
+  document.getElementById('topbar-sub').textContent = `ID: ${id.substring(0,8)}…`;
+  document.getElementById('refresh-btn').style.display = '';
+  document.getElementById('source-count-badge').style.display = '';
+  renderNbList();
+  refreshSources();
+  loadArtifacts();
+  // reset chat
+  state.conversationId = null;
+  state.chatHistory = [];
+  renderChat();
+}
+
+function toggleCheckedNb(id, checked) {
+  if (checked) state.checkedNbs.add(id);
+  else state.checkedNbs.delete(id);
+  updateReportBtn();
+}
+
+function updateReportBtn() {
+  const btn = document.getElementById('gen-report-btn');
+  btn.disabled = !(state.checkedNbs.size > 0 && state.selectedTemplate);
+}
+
+async function addNotebook() {
+  const url   = document.getElementById('nb-url-input').value.trim();
+  const title = document.getElementById('nb-title-input').value.trim();
+  const tags  = document.getElementById('nb-tags-input').value.trim()
+                  .split(',').map(t => t.trim()).filter(Boolean);
+  if (!url) { toast('Paste a notebook URL first.', 'error'); return; }
+  try {
+    const nb = await api('POST', '/notebooks', { url, title: title||null, tags });
+    state.notebooks.push(nb);
+    toast(`Added: ${nb.title}`, 'success');
+    document.getElementById('nb-url-input').value = '';
+    document.getElementById('nb-title-input').value = '';
+    document.getElementById('nb-tags-input').value = '';
+    renderNbList();
+  } catch(e) {
+    toast(`Error: ${e.message}`, 'error');
+  }
+}
+
+async function removeNotebook(id) {
+  if (!confirm('Remove this content from the manager? (The notebook itself is NOT deleted from Google.)')) return;
+  await api('DELETE', `/notebooks/${id}`);
+  state.notebooks = state.notebooks.filter(n => n.id !== id);
+  state.checkedNbs.delete(id);
+  if (state.activeNb === id) { state.activeNb = null; }
+  renderNbList();
+  toast('Content removed.', 'info');
+}
+
+/* ══════════════════════════════════════════════════════════
+   SOURCES
+══════════════════════════════════════════════════════════ */
+async function refreshSources() {
+  if (!state.activeNb) return;
+  document.getElementById('source-list').innerHTML = `
+    <div class="empty-state"><div class="spinner spinner-dark"></div></div>`;
+  try {
+    const data = await api('GET', `/notebooks/${state.activeNb}/sources`);
+    state.sources = data.sources || [];
+    renderSources();
+  } catch(e) {
+    toast(`Sources error: ${e.message}`, 'error');
+  }
+}
+
+function renderSources() {
+  const s = state.sources;
+  const badge = document.getElementById('source-count-badge');
+  badge.textContent = `${s.length} sources`;
+
+  // metrics
+  const m = document.getElementById('source-metrics');
+  m.style.display = s.length ? '' : 'none';
+  document.getElementById('m-total').textContent = s.length;
+  document.getElementById('m-ready').textContent = s.filter(x=>x.status==='ready').length;
+  document.getElementById('m-proc').textContent  = s.filter(x=>x.status==='processing').length;
+  document.getElementById('m-err').textContent   = s.filter(x=>x.status==='error').length;
+
+  if (!s.length) {
+    document.getElementById('source-list').innerHTML = `
+      <div class="empty-state"><div class="big">📭</div><p>No sources yet.</p></div>`;
+    return;
+  }
+
+  document.getElementById('source-list').innerHTML = s.map(src => {
+    const cls = src.status === 'ready' ? 'badge-ready' : src.status === 'processing' ? 'badge-proc' : 'badge-error';
+    const icon = src.status === 'ready' ? '✅' : src.status === 'processing' ? '⏳' : '❌';
+    const url  = src.url ? `<a href="${src.url}" target="_blank">↗ Open</a>` : '';
+    return `
+    <div class="source-item ${src.status !== 'ready' ? src.status : ''}">
+      <div class="source-body">
+        <div class="source-title">${src.title || 'Untitled'}</div>
+        <div class="source-meta">
+          <span class="source-badge ${cls}">${icon} ${src.status}</span>
+          &nbsp;·&nbsp; <code>${src.id.substring(0,8)}…</code>
+          &nbsp;·&nbsp; ${src.created_at ? src.created_at.substring(0,10) : ''}
+          &nbsp;·&nbsp; ${url}
+        </div>
+      </div>
+      <button class="btn-del-src" onclick="deleteSource('${src.id}')" title="Delete source">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+async function addSource() {
+  const url = document.getElementById('new-src-url').value.trim();
+  if (!url)           { toast('Enter a URL.', 'error'); return; }
+  if (!state.activeNb){ toast('Select content first.', 'error'); return; }
+  toast('Adding source…', 'info');
+  try {
+    await api('POST', `/notebooks/${state.activeNb}/sources`, { url });
+    document.getElementById('new-src-url').value = '';
+    toast('Source added! Refreshing…', 'success');
+    await refreshSources();
+  } catch(e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function deleteSource(srcId) {
+  if (!confirm('Delete this source from the content?')) return;
+  try {
+    await api('DELETE', `/notebooks/${state.activeNb}/sources/${srcId}`);
+    toast('Source deleted.', 'success');
+    await refreshSources();
+  } catch(e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function addResearch() {
+  const q    = document.getElementById('research-q').value.trim();
+  const mode = document.getElementById('research-mode').value;
+  if (!q)             { toast('Enter a search query.', 'error'); return; }
+  if (!state.activeNb){ toast('Select content first.', 'error'); return; }
+  toast(mode === 'deep' ? 'Deep research started (background)…' : 'Searching…', 'info', 6000);
+  try {
+    const r = await api('POST', `/notebooks/${state.activeNb}/research`, { query: q, mode });
+    toast(r.ok ? 'Research done! Refreshing sources…' : 'Research queued (deep mode).', r.ok ? 'success' : 'info');
+    document.getElementById('research-q').value = '';
+    if (r.ok) await refreshSources();
+  } catch(e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   CHAT
+══════════════════════════════════════════════════════════ */
+function renderChat() {
+  const container = document.getElementById('chat-messages');
+  if (!state.chatHistory.length) {
+    container.innerHTML = '<div class="chat-empty" id="chat-empty">Select content and ask a question to begin.</div>';
+    return;
+  }
+  container.innerHTML = state.chatHistory.map(m => {
+    const isUser = m.role === 'user';
+    let metaHtml = '';
+    if (isUser) {
+      const fileTag = m.filename
+        ? ` · <span class="claude-badge">📎 ${escHtml(m.filename)}</span>` : '';
+      metaHtml = `You${fileTag} · ${m.time}`;
+    } else {
+      let source = 'Content';
+      if (m.source === 'claude') {
+        const authIcon = m.auth_method === 'claude_code' ? '✦ Claude Code' : '🔑 API Key';
+        source = `<span class="claude-badge">${authIcon} · claude-sonnet-4-6</span>`;
+      }
+      const tokens = m.tokens
+        ? ` · <span class="token-info">${m.tokens.in}↑ ${m.tokens.out}↓ tokens</span>` : '';
+      metaHtml = `${source}${tokens} · ${m.time}`;
+    }
+    return `
+    <div class="msg ${isUser ? 'msg-user' : 'msg-ai'}">
+      <div class="msg-bubble">${isUser ? '🧑 ' : '🤖 '}${escHtml(m.content)}</div>
+      <div class="msg-meta">${metaHtml}</div>
+    </div>`;
+  }).join('');
+  container.scrollTop = container.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function sendSuggestion(btn) {
+  document.getElementById('chat-input').value = btn.textContent;
+  sendChat();
+}
+
+async function sendChat() {
+  const input = document.getElementById('chat-input');
+  const q = input.value.trim();
+  if (!q) return;
+  input.value = '';
+  const now = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+
+  if (state.chatMode === 'claude') {
+    // ── Claude mode (streaming SSE via claude CLI) ────────────
+    const file = state.attachedFile;
+    state.chatHistory.push({ role: 'user', content: q, time: now, filename: file ? file.name : null });
+    removeAttachment();
+    // push empty AI message as streaming placeholder
+    const aiIdx = state.chatHistory.length;
+    state.chatHistory.push({ role: 'ai', content: '', time: '', source: 'claude', streaming: true });
+    renderChat();
+
+    try {
+      const historyForApi = state.chatHistory.slice(0, aiIdx - 1).map(m => ({
+        role: m.role === 'ai' ? 'assistant' : 'user',
+        content: m.content,
+      }));
+      const fd = new FormData();
+      fd.append('question', q);
+      fd.append('history', JSON.stringify(historyForApi));
+      if (file) fd.append('file', file);
+
+      const res = await fetch('/api/claude/chat', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error(errText);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let accumulated = '';
+
+      const getAiEl = () => {
+        const msgs = document.querySelectorAll('#chat-messages .chat-message.ai');
+        return msgs.length ? msgs[msgs.length - 1].querySelector('.message-content') : null;
+      };
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const payload = line.slice(6);
+          if (payload === '[DONE]') break;
+          try {
+            const obj = JSON.parse(payload);
+            if (obj.error) throw new Error(obj.error);
+            if (obj.text) {
+              accumulated += obj.text;
+              state.chatHistory[aiIdx].content = accumulated;
+              const el = getAiEl();
+              if (el) el.innerHTML = renderMarkdown(accumulated);
+            }
+          } catch(pe) {
+            if (pe.message !== 'Unexpected end of JSON input') throw pe;
+          }
+        }
+      }
+
+      state.chatHistory[aiIdx].time      = new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+      state.chatHistory[aiIdx].streaming = false;
+      state.chatHistory[aiIdx].content   = accumulated || '(no response)';
+      renderChat();
+    } catch(e) {
+      state.chatHistory[aiIdx].content   = `Error: ${e.message}`;
+      state.chatHistory[aiIdx].streaming = false;
+      renderChat();
+      toast('Claude error: ' + e.message, 'error');
+    }
+  } else {
+    // ── NotebookLM mode ───────────────────────────────────────
+    if (!state.activeNb) { toast('Select content first.', 'error'); return; }
+    state.chatHistory.push({ role: 'user', content: q, time: now });
+    renderChat();
+    try {
+      const r = await api('POST', `/notebooks/${state.activeNb}/chat`,
+        { question: q, conversation_id: state.conversationId });
+      state.conversationId = r.conversation_id || state.conversationId;
+      const answer = r.answer || r.error || JSON.stringify(r);
+      state.chatHistory.push({
+        role: 'ai',
+        content: answer,
+        time: new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}),
+        source: 'notebooklm',
+      });
+      renderChat();
+    } catch(e) {
+      state.chatHistory.push({ role: 'ai', content: `Error: ${e.message}`, time: '', source: 'notebooklm' });
+      renderChat();
+      toast('Chat error: ' + e.message, 'error');
+    }
+  }
+}
+
+function clearChat() {
+  state.chatHistory    = [];
+  state.conversationId = null;
+  removeAttachment();
+  renderChat();
+  document.getElementById('chat-input').value = '';
+}
+
+function setChatMode(mode) {
+  state.chatMode = mode;
+  document.getElementById('mode-notebooklm').classList.toggle('active', mode === 'notebooklm');
+  document.getElementById('mode-claude').classList.toggle('active', mode === 'claude');
+  const showClaude = mode === 'claude';
+  document.getElementById('attach-btn').style.display   = showClaude ? '' : 'none';
+  document.getElementById('claude-hint').style.display  = showClaude ? '' : 'none';
+  const inp = document.getElementById('chat-input');
+  inp.placeholder = showClaude
+    ? 'Ask Claude anything — optionally attach a file (PDF, image, CSV, code…)'
+    : 'Ask anything about the content…';
+  if (!showClaude) removeAttachment();
+  if (showClaude) loadClaudeAuthStatus();
+}
+
+async function loadClaudeAuthStatus() {
+  const dot   = document.getElementById('auth-dot');
+  const label = document.getElementById('auth-label');
+  label.textContent = 'Checking auth…';
+  dot.className = 'auth-dot auth-dot-none';
+  label.className = 'source-badge';
+  try {
+    const r = await api('GET', '/claude/auth-status');
+    if (r.authenticated) {
+      dot.className       = 'auth-dot auth-dot-ok';
+      label.className     = 'source-badge auth-badge-cc';
+      label.textContent   = `✦ Claude Code CLI  ·  ${r.label}`;
+    } else {
+      dot.className     = 'auth-dot auth-dot-none';
+      label.className   = 'source-badge auth-badge-none';
+      label.textContent = '⚠ claude CLI not found — run: npm install -g @anthropic-ai/claude-code && claude login';
+    }
+  } catch(e) {
+    label.textContent = '⚠ Could not check auth';
+  }
+}
+
+function handleFileSelect(input) {
+  const file = input.files[0];
+  if (!file) return;
+  state.attachedFile = file;
+  document.getElementById('file-chip-name').textContent = file.name;
+  document.getElementById('file-chip-row').style.display = '';
+  input.value = ''; // reset so the same file can be re-selected
+}
+
+function removeAttachment() {
+  state.attachedFile = null;
+  document.getElementById('file-chip-row').style.display = 'none';
+  document.getElementById('file-chip-name').textContent  = '';
+}
+
+/* ══════════════════════════════════════════════════════════
+   REPORT TEMPLATES
+══════════════════════════════════════════════════════════ */
+async function loadTemplates() {
+  state.templates = await api('GET', '/report-templates');
+  renderTemplates();
+}
+
+function renderTemplates() {
+  const cards = state.templates.map(t => {
+    const isSelected = state.selectedTemplate === t.id;
+    const customBadge = !t.builtin ? '<span class="tpl-custom-badge">custom</span>' : '';
+    const deleteBtn   = !t.builtin
+      ? `<button class="tpl-delete-btn" onclick="event.stopPropagation();deleteTpl('${t.id}')">🗑 Delete</button>`
+      : '';
+    return `
+    <div class="template-card ${isSelected ? 'selected' : ''}" onclick="selectTemplate('${t.id}')">
+      ${customBadge}
+      <div class="template-icon">${t.icon}</div>
+      <div class="template-name">${t.name}</div>
+      <div class="template-desc">${t.description}</div>
+      <div class="template-actions">
+        <button class="tpl-edit-btn" onclick="event.stopPropagation();openTplModal('${t.id}')">✏️ Edit</button>
+        ${deleteBtn}
+      </div>
+    </div>`;
+  }).join('');
+
+  const newCard = `
+    <div class="template-card new-template" onclick="openTplModal(null)">
+      <div style="font-size:1.8rem">➕</div>
+      <div style="font-size:.85rem;font-weight:600;margin-top:6px">New Template</div>
+    </div>`;
+
+  document.getElementById('template-grid').innerHTML = cards + newCard;
+}
+
+function selectTemplate(id) {
+  state.selectedTemplate = id;
+  renderTemplates();
+  updateReportBtn();
+}
+
+/* ── Template editor modal ─────────────────────────────────────────────── */
+
+let _tplEditingId = null; // null = new template
+
+function openTplModal(tplId) {
+  _tplEditingId = tplId;
+  const overlay = document.getElementById('tpl-modal-overlay');
+  const title   = document.getElementById('tpl-modal-title');
+
+  if (tplId) {
+    const t = state.templates.find(x => x.id === tplId);
+    if (!t) return;
+    title.textContent = t.builtin ? `Customise: ${t.name}` : `Edit: ${t.name}`;
+    document.getElementById('tpl-icon').value = t.icon;
+    document.getElementById('tpl-name').value = t.name;
+    document.getElementById('tpl-desc').value = t.description;
+    tplRenderRows(t.questions, t.sections);
+  } else {
+    title.textContent = 'New Template';
+    document.getElementById('tpl-icon').value = '📝';
+    document.getElementById('tpl-name').value = '';
+    document.getElementById('tpl-desc').value = '';
+    tplRenderRows([''], ['']);
+  }
+  overlay.style.display = 'flex';
+}
+
+function closeTplModal() {
+  document.getElementById('tpl-modal-overlay').style.display = 'none';
+}
+
+function tplRenderRows(questions, sections) {
+  const list = document.getElementById('tpl-question-list');
+  list.innerHTML = questions.map((q, i) => `
+    <div class="tpl-question-row" data-idx="${i}">
+      <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+        <input class="tpl-sec-input" placeholder="Section name (e.g. Executive Summary)" value="${escHtml(sections[i] || '')}">
+        <textarea class="tpl-q-input" placeholder="Question to ask the content…">${escHtml(q)}</textarea>
+      </div>
+      <button class="tpl-rm-btn" onclick="tplRemoveRow(this)">✕</button>
+    </div>`).join('');
+}
+
+function tplAddRow() {
+  const list = document.getElementById('tpl-question-list');
+  const idx  = list.children.length;
+  const div  = document.createElement('div');
+  div.className = 'tpl-question-row';
+  div.dataset.idx = idx;
+  div.innerHTML = `
+    <div style="flex:1;display:flex;flex-direction:column;gap:4px">
+      <input class="tpl-sec-input" placeholder="Section name">
+      <textarea class="tpl-q-input" placeholder="Question to ask the content…"></textarea>
+    </div>
+    <button class="tpl-rm-btn" onclick="tplRemoveRow(this)">✕</button>`;
+  list.appendChild(div);
+}
+
+function tplRemoveRow(btn) {
+  const rows = document.querySelectorAll('#tpl-question-list .tpl-question-row');
+  if (rows.length <= 1) { toast('At least one question required.', 'error'); return; }
+  btn.closest('.tpl-question-row').remove();
+}
+
+async function saveTplModal() {
+  const name = document.getElementById('tpl-name').value.trim();
+  if (!name) { toast('Template name is required.', 'error'); return; }
+
+  const questions = [...document.querySelectorAll('#tpl-question-list .tpl-q-input')]
+    .map(el => el.value.trim()).filter(Boolean);
+  const sections  = [...document.querySelectorAll('#tpl-question-list .tpl-sec-input')]
+    .map(el => el.value.trim());
+
+  if (!questions.length) { toast('Add at least one question.', 'error'); return; }
+
+  const payload = {
+    id:          _tplEditingId || undefined,
+    name,
+    icon:        document.getElementById('tpl-icon').value.trim() || '📝',
+    description: document.getElementById('tpl-desc').value.trim(),
+    questions,
+    sections:    sections.map((s, i) => s || `Section ${i + 1}`),
+  };
+
+  try {
+    await api('POST', '/report-templates/custom', payload);
+    closeTplModal();
+    await loadTemplates();
+    // auto-select the saved template
+    const savedId = _tplEditingId || state.templates[state.templates.length - 1]?.id;
+    if (savedId) selectTemplate(savedId);
+    toast('Template saved!', 'success');
+  } catch(e) {
+    toast('Save failed: ' + e.message, 'error');
+  }
+}
+
+async function deleteTpl(tplId) {
+  if (!confirm('Delete this custom template?')) return;
+  try {
+    await api('DELETE', `/report-templates/custom/${tplId}`);
+    if (state.selectedTemplate === tplId) state.selectedTemplate = null;
+    await loadTemplates();
+    updateReportBtn();
+    toast('Template deleted.', 'success');
+  } catch(e) {
+    toast('Delete failed: ' + e.message, 'error');
+  }
+}
+
+async function generateReport() {
+  if (!state.selectedTemplate)     { toast('Pick a report template.', 'error'); return; }
+  if (!state.checkedNbs.size)      { toast('Check at least one content item in the sidebar.', 'error'); return; }
+  const btn = document.getElementById('gen-report-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating…';
+  document.getElementById('report-output').innerHTML = `
+    <div class="empty-state">
+      <div class="spinner spinner-dark" style="width:32px;height:32px;border-width:3px"></div>
+      <p class="mt-12">Querying content — this may take 1-3 minutes…</p>
+    </div>`;
+  try {
+    const r = await api('POST', '/reports/generate', {
+      template_id: state.selectedTemplate,
+      notebook_ids: [...state.checkedNbs],
+    });
+    state.lastReport = r;
+    renderReportOutput(r);
+    document.getElementById('save-report-btn').disabled = false;
+    toast('Report generated!', 'success');
+  } catch(e) {
+    document.getElementById('report-output').innerHTML = `<div class="card"><p class="risk-high">Error: ${e.message}</p></div>`;
+    toast('Report error: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.innerHTML = '📊 Generate Report';
+  updateReportBtn();
+}
+
+function renderReportOutput(r) {
+  const t = r.template;
+  const date = new Date(r.generated_at).toLocaleString();
+  let html = `
+    <div class="card">
+      <h3>${t.icon} ${t.name}</h3>
+      <p class="text-sm text-muted">Generated: ${date} · ${r.notebooks.length} content item(s)</p>
+    </div>`;
+
+  r.notebooks.forEach(nb => {
+    html += `<div class="nb-section-header">📒 ${nb.title}</div>`;
+    html += `<div class="report-section">`;
+    nb.answers.forEach((qa, i) => {
+      const section = t.sections[i] || `Section ${i+1}`;
+      html += `
+        <div class="qa-block">
+          <h4>${section}</h4>
+          <div class="qa-q">${qa.question}</div>
+          <div class="qa-a card">${escHtml(qa.answer)}</div>
+        </div>`;
+    });
+    html += `</div>`;
+  });
+
+  document.getElementById('report-output').innerHTML = html;
+}
+
+function downloadReport() {
+  if (!state.lastReport) { toast('Generate a report first.', 'error'); return; }
+  const r = state.lastReport;
+  const t = r.template;
+  let md = `# ${t.icon} ${t.name}\n`;
+  md += `*Generated: ${new Date(r.generated_at).toLocaleString()}*\n\n`;
+  r.notebooks.forEach(nb => {
+    md += `## 📒 ${nb.title}\n\n`;
+    nb.answers.forEach((qa, i) => {
+      const section = t.sections[i] || `Section ${i+1}`;
+      md += `### ${section}\n\n**Q:** ${qa.question}\n\n${qa.answer}\n\n---\n\n`;
+    });
+  });
+  const blob = new Blob([md], { type: 'text/markdown' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${t.id}_report_${Date.now()}.md`;
+  a.click();
+}
+
+function generateHtmlReport() {
+  if (!state.lastReport) { toast('Generate a report first.', 'error'); return; }
+  const r = state.lastReport;
+  const t = r.template;
+  const date = new Date(r.generated_at).toLocaleString('en-GB', {
+    day:'2-digit', month:'long', year:'numeric', hour:'2-digit', minute:'2-digit'
+  });
+
+  /* ── render each notebook's sections ── */
+  const notebookHtml = r.notebooks.map(nb => {
+    const sectionsHtml = nb.answers.map((qa, i) => {
+      const section = t.sections[i] || `Section ${i + 1}`;
+      /* convert **bold** markdown to <strong> and newlines to <br> */
+      const formatted = qa.answer
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n\*/g, '<br>•')
+        .replace(/\n/g, '<br>');
+      return `
+        <div class="section">
+          <h3>${section}</h3>
+          <div class="question">${qa.question}</div>
+          <div class="answer"><p>${formatted}</p></div>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="notebook-block">
+        <div class="notebook-label">📒 ${nb.title}</div>
+        ${sectionsHtml}
+      </div>`;
+  }).join('');
+
+  /* ── risk colour helper (used in CSS) ── */
+  const html = `<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${t.icon} ${t.name}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+  /* ── screen styles ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --green: #15803d; --green-light: #dcfce7; --green-dark: #14532d;
+    --slate: #334155;  --slate-light: #f1f5f9; --slate-mid: #64748b;
+    --border: #e2e8f0; --white: #fff;
+    --font: 'Be Vietnam Pro', 'Noto Sans', sans-serif;
+  }
+  body {
+    font-family: var(--font);
+    font-size: 11pt;
+    color: #1e293b;
+    background: #f8fafc;
+    padding: 0;
+    margin: 0;
+    /* prevent diacritic splitting */
+    word-break: normal;
+    overflow-wrap: break-word;
+    hyphens: none;
+    -webkit-hyphens: none;
+    line-break: strict;
+  }
+  .page-wrap {
+    max-width: 860px;
+    margin: 32px auto;
+    background: var(--white);
+    box-shadow: 0 4px 32px rgba(0,0,0,.1);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  /* ── print button bar (screen only) ── */
+  .print-bar {
+    background: var(--green-dark);
+    color: var(--white);
+    padding: 12px 32px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .print-bar span { font-size: .85rem; opacity: .85; }
+  .print-btn {
+    background: var(--white);
+    color: var(--green-dark);
+    border: none;
+    border-radius: 6px;
+    padding: 8px 20px;
+    font-size: .88rem;
+    font-weight: 700;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: opacity .15s;
+  }
+  .print-btn:hover { opacity: .85; }
+
+  /* ── cover / header ── */
+  .cover {
+    background: linear-gradient(135deg, var(--green-dark) 0%, var(--green) 60%, #4ade80 100%);
+    color: var(--white);
+    padding: 48px 40px 36px;
+  }
+  .cover-label {
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    opacity: .75;
+    margin-bottom: 10px;
+  }
+  .cover h1 {
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 12px;
+    font-family: var(--font);
+    word-break: normal;
+    hyphens: none;
+  }
+  .cover-meta {
+    font-size: .82rem;
+    opacity: .8;
+    border-top: 1px solid rgba(255,255,255,.3);
+    padding-top: 12px;
+    margin-top: 16px;
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .cover-meta span::before { content: '· '; }
+  .cover-meta span:first-child::before { content: ''; }
+
+  /* ── key metrics strip ── */
+  .metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-bottom: 2px solid var(--green-light);
+  }
+  .metric {
+    padding: 18px 20px;
+    text-align: center;
+    border-right: 1px solid var(--border);
+  }
+  .metric:last-child { border-right: none; }
+  .metric-val { font-size: 1.4rem; font-weight: 800; color: var(--green); font-family: var(--font); }
+  .metric-lbl { font-size: .68rem; color: var(--slate-mid); margin-top: 3px; text-transform: uppercase; letter-spacing: .06em; }
+
+  /* ── body ── */
+  .body { padding: 0 40px 40px; }
+
+  /* ── notebook block ── */
+  .notebook-block { margin-top: 32px; }
+  .notebook-label {
+    background: var(--green-light);
+    color: var(--green-dark);
+    font-weight: 700;
+    font-size: .88rem;
+    padding: 9px 16px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+    border-left: 4px solid var(--green);
+    font-family: var(--font);
+  }
+
+  /* ── section ── */
+  .section { margin-bottom: 28px; page-break-inside: avoid; }
+  .section h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--green-dark);
+    border-bottom: 1.5px solid var(--green-light);
+    padding-bottom: 6px;
+    margin-bottom: 8px;
+    font-family: var(--font);
+    word-break: normal;
+    hyphens: none;
+  }
+  .question {
+    font-size: .78rem;
+    color: var(--slate-mid);
+    font-style: italic;
+    margin-bottom: 8px;
+    padding-left: 10px;
+    border-left: 2px solid var(--border);
+  }
+  .answer {
+    background: var(--slate-light);
+    border-radius: 6px;
+    padding: 14px 18px;
+    font-size: .87rem;
+    line-height: 1.7;
+    color: #1e293b;
+    word-break: normal;
+    overflow-wrap: break-word;
+    hyphens: none;
+    -webkit-hyphens: none;
+  }
+  .answer p { margin-bottom: .5em; }
+  .answer p:last-child { margin-bottom: 0; }
+
+  /* ── footer ── */
+  .report-footer {
+    border-top: 2px solid var(--green-light);
+    padding: 16px 40px;
+    font-size: .72rem;
+    color: var(--slate-mid);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: var(--font);
+  }
+  .footer-badge {
+    background: var(--green-light);
+    color: var(--green-dark);
+    padding: 3px 10px;
+    border-radius: 20px;
+    font-weight: 700;
+    font-size: .68rem;
+  }
+
+  /* ── @media print ── */
+  @media print {
+    body { background: var(--white); font-size: 10pt; font-family: var(--font); word-break: normal; hyphens: none; }
+    .page-wrap { max-width: 100%; box-shadow: none; border-radius: 0; margin: 0; }
+    .print-bar { display: none !important; }
+    .cover { padding: 32px 28px 24px; }
+    .cover h1 { font-size: 1.6rem; }
+    .body { padding: 0 28px 28px; }
+    .report-footer { padding: 12px 28px; }
+    .section { page-break-inside: avoid; }
+    .notebook-block { page-break-before: auto; }
+    @page {
+      margin: 15mm 12mm;
+      size: A4;
+    }
+    @page :first { margin-top: 8mm; }
+  }
+</style>
+</head>
+<body>
+<div class="page-wrap">
+
+  <!-- print bar (hidden in print) -->
+  <div class="print-bar">
+    <span>📄 Ready to print — click the button or use Ctrl+P / Cmd+P</span>
+    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
+  </div>
+
+  <!-- cover -->
+  <div class="cover">
+    <div class="cover-label">Business Intelligence Report</div>
+    <h1>${t.icon} ${t.name}</h1>
+    <div class="cover-meta">
+      <span>Generated: ${date}</span>
+      <span>${r.notebooks.length} content item${r.notebooks.length > 1 ? 's' : ''}</span>
+      <span>Content Manager</span>
+    </div>
+  </div>
+
+  <!-- key metrics (IKI Village defaults, dynamic if single notebook) -->
+  <div class="metrics">
+    <div class="metric"><div class="metric-val">1,426+</div><div class="metric-lbl">Billion VND Investment</div></div>
+    <div class="metric"><div class="metric-val">424</div><div class="metric-lbl">Total Apartments</div></div>
+    <div class="metric"><div class="metric-val">5.1 ha</div><div class="metric-lbl">Land Area</div></div>
+    <div class="metric"><div class="metric-val">Q1 2028</div><div class="metric-lbl">Handover Target</div></div>
+  </div>
+
+  <!-- body -->
+  <div class="body">
+    ${notebookHtml}
+  </div>
+
+  <!-- footer -->
+  <div class="report-footer">
+    <span>Confidential · ${t.name} · ${date}</span>
+    <span class="footer-badge">Content Manager</span>
+  </div>
+
+</div>
+<scr` + `ipt>
+  if (window.opener) { window.focus(); }
+</scr` + `ipt>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url  = URL.createObjectURL(blob);
+  const win  = window.open(url, '_blank');
+  if (!win) toast('Please allow pop-ups to open the HTML report.', 'error');
+}
+
+/* ══════════════════════════════════════════════════════════
+   SAVED REPORTS
+══════════════════════════════════════════════════════════ */
+async function saveReport(customName) {
+  if (!state.lastReport) { toast('Generate a report first.', 'error'); return; }
+  const name = customName || `${state.lastReport.template.name} — ${new Date().toLocaleString()}`;
+  try {
+    const entry = await api('POST', '/reports/saved', { report: state.lastReport, name });
+    toast(`Saved: ${entry.name}`, 'success');
+    document.getElementById('save-report-btn').textContent = '✅ Saved';
+    setTimeout(() => {
+      const btn = document.getElementById('save-report-btn');
+      if (btn) btn.textContent = '💾 Save';
+    }, 2500);
+    // refresh saved list if tab is active
+    if (document.getElementById('tab-saved').classList.contains('active')) loadSavedReports();
+  } catch(e) { toast('Save error: ' + e.message, 'error'); }
+}
+
+async function loadSavedReports() {
+  const container = document.getElementById('saved-report-list');
+  container.innerHTML = `<div class="empty-state"><div class="spinner spinner-dark"></div></div>`;
+  try {
+    const reports = await api('GET', '/reports/saved');
+    if (!reports.length) {
+      container.innerHTML = `<div class="empty-state"><div class="big">💾</div><p>No saved reports yet. Generate and click Save.</p></div>`;
+      return;
+    }
+    container.innerHTML = reports.map(r => {
+      const date = new Date(r.saved_at).toLocaleString();
+      const nbCount = r.report?.notebooks?.length || 0;
+      const icon = r.report?.template?.icon || '📄';
+      return `
+      <div class="saved-report-card">
+        <div class="saved-report-icon">${icon}</div>
+        <div class="saved-report-body">
+          <div class="saved-report-name">${escHtml(r.name)}</div>
+          <div class="saved-report-meta">Saved ${date} · ${nbCount} content item${nbCount !== 1 ? 's' : ''}</div>
+        </div>
+        <div class="saved-report-actions">
+          <button class="btn btn-secondary btn-sm" onclick="loadSavedReport('${r.id}')">📂 Load</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteSavedReport('${r.id}')">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch(e) { toast('Error loading saved reports: ' + e.message, 'error'); }
+}
+
+async function loadSavedReport(id) {
+  try {
+    const reports = await api('GET', '/reports/saved');
+    const entry = reports.find(r => r.id === id);
+    if (!entry) { toast('Report not found.', 'error'); return; }
+    state.lastReport = entry.report;
+    renderReportOutput(entry.report);
+    document.getElementById('save-report-btn').disabled = false;
+    // switch to report tab
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    document.querySelector('[data-tab="report"]').classList.add('active');
+    document.getElementById('tab-report').classList.add('active');
+    toast(`Loaded: ${entry.name}`, 'success');
+  } catch(e) { toast('Load error: ' + e.message, 'error'); }
+}
+
+async function deleteSavedReport(id) {
+  if (!confirm('Delete this saved report?')) return;
+  try {
+    await api('DELETE', `/reports/saved/${id}`);
+    toast('Report deleted.', 'info');
+    loadSavedReports();
+  } catch(e) { toast('Delete error: ' + e.message, 'error'); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   GENERATE ARTIFACTS
+══════════════════════════════════════════════════════════ */
+async function generateArtifact(type) {
+  if (!state.activeNb) { toast('Select content first.', 'error'); return; }
+  const instrMap = { audio: 'audio-instr', report: 'report-instr' };
+  const fmtMap   = { audio: 'audio-format', report: 'report-format', quiz: 'quiz-diff' };
+  const instr = instrMap[type] ? document.getElementById(instrMap[type]).value : '';
+  const fmt   = fmtMap[type]   ? document.getElementById(fmtMap[type]).value   : '';
+  toast(`Starting ${type} generation…`, 'info', 5000);
+  try {
+    const r = await api('POST', `/notebooks/${state.activeNb}/generate`, {
+      type, instructions: instr, format: fmt, notebook_id: state.activeNb,
+    });
+    if (type === 'mind-map' && r.data) {
+      document.getElementById('mindmap-output').style.display = '';
+      document.getElementById('mindmap-json').value = JSON.stringify(r.data, null, 2);
+    }
+    toast(r.ok ? `${type} started! Check artifacts below.` : `${type} error: ${r.error}`,
+          r.ok ? 'success' : 'error');
+    if (r.ok) setTimeout(loadArtifacts, 2000);
+  } catch(e) { toast(`Error: ${e.message}`, 'error'); }
+}
+
+async function loadArtifacts() {
+  if (!state.activeNb) return;
+  try {
+    const data = await api('GET', `/notebooks/${state.activeNb}/artifacts`);
+    const arts = data.artifacts || [];
+    if (!arts.length) {
+      document.getElementById('artifact-list').innerHTML = `<p class="text-muted text-sm">No artifacts yet.</p>`;
+      return;
+    }
+    document.getElementById('artifact-list').innerHTML = arts.map(a => {
+      const statusIcon = a.status === 'completed' ? '✅' : a.status === 'in_progress' ? '⏳' : '❓';
+      return `
+        <div class="artifact-item">
+          <span class="artifact-type">${a.type || '?'}</span>
+          <div class="artifact-body">
+            <div class="artifact-title">${a.title || 'Untitled'}</div>
+            <div class="artifact-meta">${statusIcon} ${a.status} · ID: ${(a.id||'').substring(0,8)}…</div>
+          </div>
+        </div>`;
+    }).join('');
+  } catch(e) { /* silent */ }
+}
+
+/* ══════════════════════════════════════════════════════════
+   AUTH
+══════════════════════════════════════════════════════════ */
+const AUTH_KEY = 'cm_auth';
+
+function getAuth() {
+  try { return JSON.parse(sessionStorage.getItem(AUTH_KEY) || 'null'); } catch { return null; }
+}
+
+function applyRole(role) {
+  document.body.classList.remove('role-admin', 'role-user');
+  document.body.classList.add(`role-${role}`);
+}
+
+function showCurrentUser(data) {
+  const badge = document.getElementById('current-user');
+  const roleLabel = data.role === 'admin' ? '⚙ Admin' : '👤 User';
+  badge.textContent = `${data.username} · ${roleLabel}`;
+}
+
+async function doLogin() {
+  const username = document.getElementById('login-user').value.trim();
+  const password = document.getElementById('login-pass').value;
+  const errEl    = document.getElementById('login-error');
+  errEl.style.display = 'none';
+  if (!username || !password) {
+    errEl.textContent = 'Please enter username and password.';
+    errEl.style.display = '';
+    return;
+  }
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) {
+      const e = await res.json();
+      errEl.textContent = e.detail || 'Login failed.';
+      errEl.style.display = '';
+      return;
+    }
+    const data = await res.json();
+    sessionStorage.setItem(AUTH_KEY, JSON.stringify(data));
+    document.getElementById('login-overlay').style.display = 'none';
+    showCurrentUser(data);
+    applyRole(data.role);
+    await init();
+  } catch(e) {
+    errEl.textContent = 'Server error: ' + e.message;
+    errEl.style.display = '';
+  }
+}
+
+function logout() {
+  sessionStorage.removeItem(AUTH_KEY);
+  location.reload();
+}
+
+/* ══════════════════════════════════════════════════════════
+   TABS
+══════════════════════════════════════════════════════════ */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'saved') loadSavedReports();
+  });
+});
+
+/* ══════════════════════════════════════════════════════════
+   INIT
+══════════════════════════════════════════════════════════ */
+async function init() {
+  await Promise.all([loadNotebooks(), loadTemplates()]);
+  // auto-select first notebook
+  if (state.notebooks.length) {
+    setActiveNb(state.notebooks[0].id);
+    state.checkedNbs.add(state.notebooks[0].id);
+    renderNbList();
+    updateReportBtn();
+  }
+}
+
+/* ── bootstrap: check session before showing the app ── */
+(function bootstrap() {
+  const auth = getAuth();
+  if (auth) {
+    document.getElementById('login-overlay').style.display = 'none';
+    showCurrentUser(auth);
+    applyRole(auth.role);
+    init();
+  }
+  // else: login overlay stays visible (default)
+})();
+</script>
+
+<!-- ── Template Editor Modal ── -->
+<div id="tpl-modal-overlay" class="tpl-modal-overlay" style="display:none" onclick="if(event.target===this)closeTplModal()">
+  <div class="tpl-modal">
+    <h3 id="tpl-modal-title">Edit Template</h3>
+    <div class="tpl-row">
+      <div>
+        <label class="label">Icon</label>
+        <input id="tpl-icon" class="input" style="font-size:1.4rem;text-align:center;padding:4px" maxlength="4" value="📝">
+      </div>
+      <div>
+        <label class="label">Template Name</label>
+        <input id="tpl-name" class="input" placeholder="e.g. Competitor Analysis">
+      </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <label class="label">Short Description</label>
+      <input id="tpl-desc" class="input" placeholder="What does this report cover?">
+    </div>
+
+    <div class="tpl-questions">
+      <label class="label">Questions & Section Names</label>
+      <p class="text-sm text-muted mb-12">Each question is answered by the selected content. The section name labels it in the report.</p>
+      <div id="tpl-question-list"></div>
+      <button class="tpl-add-btn" onclick="tplAddRow()">+ Add Question</button>
+    </div>
+
+    <div class="tpl-modal-footer">
+      <button class="btn btn-secondary" onclick="closeTplModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveTplModal()">💾 Save Template</button>
+    </div>
+  </div>
+</div>
+</body>
+</html>
