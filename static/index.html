@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Content Manager</title>
+<script src="https://unpkg.com/html-docx-js@0.3.1/dist/html-docx.js"></script>
 <style>
 /* ── reset & base ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -477,6 +478,7 @@ body.role-user .admin-only { display: none !important; }
           </button>
           <button class="btn btn-secondary" id="save-report-btn" onclick="saveReport()" disabled>💾 Save</button>
           <button class="btn btn-secondary" onclick="downloadReport()">⬇️ Download MD</button>
+          <button class="btn btn-secondary" onclick="downloadDocx()" style="background:#e0f2fe;border-color:#bae6fd;color:#0369a1;">📝 DOCX</button>
           <button class="btn btn-secondary" onclick="generateHtmlReport()" style="background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8;">🖨️ HTML → PDF</button>
         </div>
 
@@ -1335,6 +1337,38 @@ function downloadReport() {
   a.click();
 }
 
+function downloadDocx() {
+  if (!state.lastReport) { toast('Generate a report first.', 'error'); return; }
+  if (typeof htmlDocx === 'undefined') { toast('DOCX library not loaded yet, try again.', 'error'); return; }
+  const r = state.lastReport;
+  const t = r.template;
+
+  let bodyHtml = `<h1>${t.icon} ${t.name}</h1><p><em>Generated: ${new Date(r.generated_at).toLocaleString()}</em></p>`;
+  r.notebooks.forEach(nb => {
+    bodyHtml += `<h2>📒 ${nb.title}</h2>`;
+    nb.answers.forEach((qa, i) => {
+      const section = t.sections[i] || `Section ${i + 1}`;
+      bodyHtml += `<h3>${section}</h3><p><em>${escHtml(qa.question)}</em></p><p>${escHtml(qa.answer).replace(/\n/g, '<br>')}</p>`;
+    });
+  });
+
+  const docHtml = '<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">' +
+    '<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1e293b}' +
+    'h1{font-size:18pt;color:#14532d}h2{font-size:13pt;color:#14532d;border-bottom:1px solid #dcfce7;padding-bottom:4px;margin-top:20px}' +
+    'h3{font-size:11pt;color:#14532d;margin-top:14px}p{margin:6px 0;line-height:1.6}' +
+    'em{color:#64748b;font-size:9.5pt}</style></head><body>' + bodyHtml + '</body></html>';
+
+  try {
+    const blob = htmlDocx.asBlob(docHtml, { orientation: 'portrait', margins: { top: 720, right: 900, bottom: 720, left: 900 } });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${t.id}_report_${Date.now()}.docx`;
+    a.click();
+  } catch(e) {
+    toast('DOCX export failed: ' + e.message, 'error');
+  }
+}
+
 function generateHtmlReport() {
   if (!state.lastReport) { toast('Generate a report first.', 'error'); return; }
   const r = state.lastReport;
@@ -1379,7 +1413,6 @@ function generateHtmlReport() {
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
-<script src="https://unpkg.com/html-docx-js@0.3.1/dist/html-docx.js"></script>
 <style>
   /* ── screen styles ── */
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1599,10 +1632,7 @@ function generateHtmlReport() {
   <!-- print bar (hidden in print) -->
   <div class="print-bar">
     <span>📄 Ready to print — click the button or use Ctrl+P / Cmd+P</span>
-    <div style="display:flex;gap:8px">
-      <button class="print-btn" onclick="downloadDocx()" style="background:#e0f2fe;color:#0369a1;">📝 Download DOCX</button>
-      <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
-    </div>
+    <button class="print-btn" onclick="window.print()">🖨️ Print / Save as PDF</button>
   </div>
 
   <!-- cover -->
@@ -1638,45 +1668,6 @@ function generateHtmlReport() {
 </div>
 <scr` + `ipt>
   if (window.opener) { window.focus(); }
-
-  function downloadDocx() {
-    try {
-      // Clone the page-wrap, strip the print-bar
-      const clone = document.querySelector('.page-wrap').cloneNode(true);
-      clone.querySelector('.print-bar').remove();
-
-      // html-docx-js needs a full HTML document string
-      const docHtml = '<!DOCTYPE html><html lang="vi"><head><meta charset="UTF-8">' +
-        '<style>' +
-        'body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; color: #1e293b; }' +
-        'h1 { font-size: 18pt; color: #14532d; }' +
-        'h3 { font-size: 12pt; color: #14532d; border-bottom: 1px solid #dcfce7; padding-bottom: 4px; margin-bottom: 6px; }' +
-        '.cover { background: #14532d; color: #fff; padding: 24px; margin-bottom: 16px; }' +
-        '.cover h1 { color: #fff; margin: 0; }' +
-        '.cover-label { font-size: 8pt; text-transform: uppercase; letter-spacing: 1px; opacity: .75; margin-bottom: 8px; }' +
-        '.cover-meta { font-size: 9pt; opacity: .8; margin-top: 12px; }' +
-        '.metrics { border-bottom: 2px solid #dcfce7; margin-bottom: 16px; display: block; }' +
-        '.metric { display: inline-block; width: 24%; text-align: center; padding: 12px; vertical-align: top; }' +
-        '.metric-val { font-size: 16pt; font-weight: 800; color: #15803d; }' +
-        '.metric-lbl { font-size: 7pt; color: #64748b; text-transform: uppercase; }' +
-        '.notebook-label { background: #dcfce7; color: #14532d; font-weight: 700; padding: 6px 12px; margin: 16px 0 12px; border-left: 4px solid #15803d; }' +
-        '.section { margin-bottom: 20px; }' +
-        '.question { font-size: 9pt; color: #64748b; font-style: italic; margin-bottom: 6px; padding-left: 8px; border-left: 2px solid #e2e8f0; }' +
-        '.answer { background: #f1f5f9; padding: 10px 14px; font-size: 10pt; line-height: 1.6; }' +
-        '.report-footer { border-top: 1px solid #dcfce7; padding-top: 10px; font-size: 8pt; color: #64748b; }' +
-        '</style></head><body>' +
-        clone.outerHTML +
-        '</body></html>';
-
-      const blob = htmlDocx.asBlob(docHtml, { orientation: 'portrait', margins: { top: 720, right: 900, bottom: 720, left: 900 } });
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = 'report.docx';
-      a.click();
-    } catch(e) {
-      alert('DOCX export failed: ' + e.message);
-    }
-  }
 </scr` + `ipt>
 </body>
 </html>`;
